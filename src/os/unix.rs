@@ -8,13 +8,18 @@ pub fn page_size() -> usize {
 }
 
 pub unsafe fn alloc(base: *const (), size: usize, protection: Protection) -> Result<*const ()> {
+  #[cfg(not(target_os = "netbsd"))]
+  let prot = protection.to_native();
+  // PROT_MPROTECT usage for avoiding problems with NetBSD pax
+  #[cfg(target_os = "netbsd")]
+  let prot = protection.to_native() | (PROT_READ | PROT_WRITE | PROT_EXEC) << 3;
   let mut flags = MAP_PRIVATE | MAP_ANON;
 
   if !base.is_null() {
     flags |= MAP_FIXED;
   }
 
-  match libc::mmap(base as *mut _, size, protection.to_native(), flags, -1, 0) {
+  match libc::mmap(base as *mut _, size, prot, flags, -1, 0) {
     MAP_FAILED => Err(Error::SystemCall(io::Error::last_os_error())),
     address => Ok(address as *const ()),
   }
